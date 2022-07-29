@@ -1,2 +1,2 @@
 # PhD
-My PhD project to classify relativistic particle distributions in the radiation belts.
+My PhD project is to classify relativistic particle distributions in the radiation belts.
