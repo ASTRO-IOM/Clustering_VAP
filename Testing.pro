@@ -1,3 +1,0 @@
-IDL CODE
-
-BLAH BLAH
