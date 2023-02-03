@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
+# author: S. Killey
 
-### script to perform an autoencoder,PCA Means shift and Agglomerative clustering on normalised @ 90 degs Flux data for Ebin = 2.6MeV
+### script to perform data preprocessing, autoencoder, PCA, Mean shift and either Agglomerative or Kmeans clustering on normalised Flux data
 
 
 #import packages
@@ -68,7 +69,7 @@ batch_size = 256   # number of samples that are propagated through the network e
 PCA_dims = 3 # set to 3 for visualisation purposes
 
 #MeanShift
-bandwidth = 1.6
+bandwidth = 1.6  # size of the window function used in the mean shift calculation
 
 
 #------------- Define Functions ----------------
@@ -562,7 +563,7 @@ for rbsp in probe:
 
 	#------------ Directories -----------------------
 	#data
-	motherpath = '/home/w21032342/Documents'
+	motherpath = '/home/Documents'
 	probedatapath = os.path.join(motherpath,'Data/RBSP_ECT/REPT/RBSP_{}'.format(rbsp))
 	combinedpath = os.path.join(probedatapath,'Combined_data') 
 	combinedyearpath = os.path.join(combinedpath, 'All_years') 
@@ -578,9 +579,6 @@ for rbsp in probe:
 	PCA_3d_figurepath = os.path.join(probefigurepath,'3D_PCA')
 	agg_figure_path = os.path.join(probefigurepath,'Agglomerative')
 	kmeans_figure_path = os.path.join(probefigurepath,'K_means')
-
-
-
 
 	#-------------- File Savenames ---------------
 	
@@ -616,21 +614,14 @@ for rbsp in probe:
 	#encoded_3d_pca = np.load(os.path.join(PCA_3d_path, '3D_PCA_{}_All.npz'.format(rbsp)), allow_pickle=True)['encoded_3d_pca']
 	#nclusters = np.load(os.path.join(Meanshift_path, 'MeanShift_rbsp_{}_All.npz'.format(rbsp)), allow_pickle=True)['nclusters']
 
-
-	#print('epochs', pd.to_datetime(epochall[9000000:9000005]))
-	#-------------- Data Slicing ----------------
-	# cut to Ebin = 2.6MeV
-	#data = dataall[:,:,2]
-	
-
-	data_norm = normalise_90(dataall)
-	data_norm = normalise_max(dataall)
+	#data_norm = normalise_90(dataall)  ##either normalise at 90 for flux magnitude clustering 
+	data_norm = normalise_max(dataall)  ## or normlaise at maximum for distribution shape clustering
 	data_flat = flatten_data(data_norm)
 	train, val, test, train_index, val_index, test_index = split_data(data_flat, test_size, training_size)
 	encoded_imgs, decoded_imgs = autoencode_images(train,val, test, input_dims, encoded_dims)
 	encoded_3d_pca = pca_3d(encoded_imgs, PCA_dims)
 	ms_clustering, nclusters = Mean_Shift(encoded_3d_pca, bandwidth)
-	ag_clustering = Agglomerative(encoded_3d_pca, nclusters)
+	#ag_clustering = Agglomerative(encoded_3d_pca, nclusters) #due to computational expense, it is not recommended to use agglomerative clustering
 	kmeans = Kmeans_cluster(encoded_3d_pca, nclusters)
 
 		
