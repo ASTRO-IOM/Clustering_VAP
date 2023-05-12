@@ -48,6 +48,8 @@ from tensorflow.keras.models import Model
 import cdflib
 import cblind as cb
 import time
+from tensorflow.random import set_seed 
+
 
 # ----------- Adjustable Params -----------------
 probe = ['b']
@@ -69,7 +71,11 @@ batch_size = 256   # number of samples that are propagated through the network e
 PCA_dims = 3 # set to 3 for visualisation purposes
 
 #MeanShift
-bandwidth = 1.6  # size of the window function used in the mean shift calculation
+#bandwidth = 1.6  # size of the window function used in the mean shift calculation
+#if using ML to estimate bandwidth
+n_samples = 6000 # the number of samples used in the estimation of the optimum meanshift bandwidth, for large datasets, use a smaller number of data points.
+Q = 0.1 # quantile used in the bandwidth estimation -> should be between 0 and 1. default: 0.3, 0.5 means to be the median of pairwise distances is used.
+
 
 
 #------------- Define Functions ----------------
@@ -211,6 +217,9 @@ def autoencode_images(train, val, test, input_dims, encoded_dims):
 	print('training length:', len(train))
 	print('validation length:', len(val))
 	print('test length:', len(test))
+	
+	#---- Consider the reproducibility of results
+	set_seed(1) 
 	
 
 	#----- Build the Autoencoder-----------
@@ -395,6 +404,20 @@ def pca_3d(encoded_imgs, PCA_dims):
 	np.savez_compressed(os.path.join(PCA_3d_path, PCA_savename), encoded_3d_pca = encoded_3d_pca, score = score, score_sample = score_sample, params = params, precision = precision, variance = var, variance_ratio = var, noise = noise, cross_scores = cross_scores, cross_mean = cross_mean, cross_std = cross_std)
 	return encoded_3d_pca
 
+#bandwidth
+def predict_bandwidth(encoded_3d_pca,n_samples,Q):
+	''' function to estimate the badwidth for the Mean Shift algorithm'''
+	print('Bandwidth Estimate')
+	st = time.process_time()
+	bandwidth = estimate_bandwidth(encoded_3d_pca, quantile = Q, n_jobs = 2, random_state=0, n_samples = n_samples)
+	print('bandwidth:', bandwidth)
+	et = time.process_time()
+	res = et - st
+	print('CPU Execution time:', res, 'seconds')
+
+	np.savez_compressed(os.path.join(Meanshift_path, Bandwidth_savename), Bandwidth = bandwidth, Quantile = Q, N_Samples = n_samples)
+
+	return bandwidth
  
 #MeanShift
 def Mean_Shift(encoded_3d_pca, bandwidth):
@@ -416,7 +439,7 @@ def Mean_Shift(encoded_3d_pca, bandwidth):
 	
 	print('number of clusters', nclusters)
 
-	#sil_score = metrics.silhouette_score(encoded_3d_pca, ms_clustering.labels_, metric = 'euclidean') 
+	#sil_score = metrics.silhouette_score(encoded_3d_pca, ms_clustering.labels_, metric = 'euclidean') # due to computational expense, sil score may not be useable on massive datasets
 	CH_score = metrics.calinski_harabasz_score(encoded_3d_pca, ms_clustering.labels_)
 	DB_index = metrics.davies_bouldin_score(encoded_3d_pca, ms_clustering.labels_)
 	#print('sil_score:', sil_score)
@@ -425,10 +448,47 @@ def Mean_Shift(encoded_3d_pca, bandwidth):
 
 
 	#save
-	#np.savez_compressed(os.path.join(Meanshift_path, MeanShift_savename), ms_clustering = ms_clustering.labels_, nclusters = nclusters, CH_score = CH_score, DB_index = DB_index)#sil_score = sil_score
+	np.savez_compressed(os.path.join(Meanshift_path, MeanShift_savename), ms_clustering = ms_clustering.labels_, nclusters = nclusters, CH_score = CH_score, DB_index = DB_index)#sil_score = sil_score
 	et = time.process_time()
 	res = et - st
-	print('CPU Execution time:', res, 'seconds')	
+	print('CPU Execution time:', res, 'seconds')
+	
+	#extract the clustering information
+	ms_clustering = ms_clustering.labels_
+	
+	#plot the PCA plot coloured by MS clusters
+	#set up figure space
+	colour, linestyle = cb.Colorplots().rainbow(nclusters)
+	patch =[]
+	fig = plt.figure(figsize=(15,15))
+	ax = fig.add_subplot(111, projection='3d')
+	ax.set_xlabel('PCA 0',fontsize = 26, labelpad = 40)
+	ax.set_ylabel('PCA 1',fontsize = 26, labelpad = 20)
+	ax.set_zlabel('PCA 2',fontsize = 26, labelpad = 20)
+	ax.xaxis.set_tick_params(labelsize=26, labelrotation = 45)
+	ax.yaxis.set_tick_params(labelsize=26)
+	ax.zaxis.set_tick_params(labelsize=26)
+	ax.tick_params(axis='both', which='major', labelsize=26)
+	ax.tick_params(axis='both', which='minor', labelsize=26)
+	ax.view_init(7, 250)
+
+	#sort data into clusters
+	for n in range(0, nclusters):
+		vars()['encoded_3d_pca_{}'.format(n)] = []
+
+		for j in range(len(ms_clustering)):   
+			if ms_clustering[j] == n:
+                		vars()['encoded_3d_pca_{}'.format(n)].append(encoded_3d_pca[j])
+		#add colours
+		ax.scatter(np.array(vars()['encoded_3d_pca_{}'.format(n)])[:,0],np.array(vars()['encoded_3d_pca_{}'.format(n)])[:,1],np.array(vars()['encoded_3d_pca_{}'.format(n)])[:,2],label='Cluster {}'.format(n))     
+		patch.append(mpatches.Patch(color=colour[n])) 
+
+	# add extras and save
+	plt.legend()#handles = patch)
+	plt.title('VAP {}'.format(rbsp).upper())
+	plt.savefig(os.path.join(ms_figure_path, ms_figure_savename), format = 'png')
+	plt.close()
+
 	return ms_clustering, nclusters
 
 #Agglomerativeclustering
@@ -590,12 +650,17 @@ for rbsp in probe:
 
 	autoencoder_savename = 'autoencoder_outputs_rbsp_{}_All'.format(rbsp)
 	PCA_savename = '3D_PCA_{}_All'.format(rbsp)
+	Bandwidth_savename = 'MeanShift_Bandwidth_rbsp_{}_All'.format(rbsp)
 	MeanShift_savename = 'MeanShift_rbsp_{}_All'.format(rbsp)
 	kmeans_savename ='kmeans_rbsp_{}_All'.format(rbsp)
 
 	losscurve_figure_savename =  'Loss_curves_rbsp_{}_All.png'.format(rbsp)
 	log_losscurve_figure_savename =  'Loss_curves_rbsp_{}_log_All.png'.format(rbsp)
 	PCA_figure_savename = '3D_PCA_rbsp_{}_All.png'.format(rbsp)
+	VAR_figure_savename = '3D_PCA_VAR_rbsp_{}_All.png'.format(rbsp)
+	CV_figure_savename = '3D_PCA__CV_rbsp_{}_All.png'.format(rbsp)
+	ms_figure_savename = 'Meanshift_rbsp_{}_All.png'.format(rbsp)
+
 	kmeans_figure_savename = 'kmeans_rbsp_{}_All.png'.format(rbsp)
 
 
@@ -613,6 +678,8 @@ for rbsp in probe:
 	#encoded_imgs = np.load(os.path.join(autoencoderpath, 'autoencoder_outputs_rbsp_{}_All.npz'.format(rbsp)), allow_pickle = True)['encoded_imgs']
 	#encoded_3d_pca = np.load(os.path.join(PCA_3d_path, '3D_PCA_{}_All.npz'.format(rbsp)), allow_pickle=True)['encoded_3d_pca']
 	#nclusters = np.load(os.path.join(Meanshift_path, 'MeanShift_rbsp_{}_All.npz'.format(rbsp)), allow_pickle=True)['nclusters']
+	
+	#----------------- RUN FUNCTIONS ---------------------------
 
 	#data_norm = normalise_90(dataall)  ##either normalise at 90 for flux magnitude clustering 
 	data_norm = normalise_max(dataall)  ## or normlaise at maximum for distribution shape clustering
@@ -620,6 +687,7 @@ for rbsp in probe:
 	train, val, test, train_index, val_index, test_index = split_data(data_flat, test_size, training_size)
 	encoded_imgs, decoded_imgs = autoencode_images(train,val, test, input_dims, encoded_dims)
 	encoded_3d_pca = pca_3d(encoded_imgs, PCA_dims)
+	bandwidth = predict_bandwidth(encoded_3d_pca,n_samples,Q)
 	ms_clustering, nclusters = Mean_Shift(encoded_3d_pca, bandwidth)
 	#ag_clustering = Agglomerative(encoded_3d_pca, nclusters) #due to computational expense, it is not recommended to use agglomerative clustering
 	kmeans = Kmeans_cluster(encoded_3d_pca, nclusters)
