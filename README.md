@@ -10,7 +10,7 @@ The algorithm has been tested for robustness on a subset of Van Allen Probe magE
 ***ML_all.py*** contains the code to run all the machine learning tools needed for this project, including the data pre-processing. The code has been built in such a way that it should automatically run on any pitch angle resolved particle flux dataset, with adjustable paths, save names and parameters.
 
 # References
-Bakrania, M., Rae, J., Walsh, A.~P., Verscharen, D., Smith, A.~W. (2020), Using dimensionality reduction and clustering techniques to classify space plasma regimes: electron magnetotail populations. AGU Fall Meeting Abstracts.
+Bakrania MR, Rae IJ, Walsh AP, Verscharen D and Smith AW (2020) "Using Dimensionality Reduction and Clustering Techniques to Classify Space Plasma Regimes", Front. Astron. Space Sci. 7:593516. doi: 10.3389/fspas.2020.593516
 
 Killey, S., Rae, I. J., Chakraborty, S., Smith, A. W., Bentley, S. N., Bakrania, M. R.,  Wainwright, R., Watt. C. E. J., Sandhu, J. K. (2023), “Using machine learning to diagnose relativistic electron distributions in the Van Allen radiation belts”, RAS Techniques and Instruments, 16 August 2023, Volume 2, Issue 1, January 2023, Pages 548–561, https://doi.org/10.1093/rasti/rzad035
 
